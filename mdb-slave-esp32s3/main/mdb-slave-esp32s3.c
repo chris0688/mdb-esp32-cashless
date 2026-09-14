@@ -238,7 +238,7 @@ static bool restart_info_published = false;
 // burns 3-4 minutes. modem_kick_for_host_reboot is fire-and-forget
 // (~1.5 s blocking), then ESP32 reboot proceeds in parallel with the
 // modem's own boot.
-static void tracked_restart(const char *reason) {
+void tracked_restart(const char *reason) {
     nvs_handle_t h;
     if (nvs_open("vmflow", NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_str(h, "restart_reason", reason);

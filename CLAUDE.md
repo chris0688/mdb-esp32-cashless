@@ -152,6 +152,30 @@ signal bars + operator + IP, and disables submit buttons during in-flight
 or registering states. The old combined `/api/v1/settings/set` endpoint
 was removed in P3.
 
+**Uplink switch — WiFi instead of cellular (Option A)**: a modem-equipped board can be switched
+to run on WiFi instead of cellular, and back, via the captive portal — never both at once, and
+never live: `network_init()` only branches once at boot, so switching always reboots. Three new
+NVS keys in `vmflow`: `uplink_pref` (u8, 0=cellular/default, 1=wifi — read at the very top of
+`network_init()`, before `modem_probe()`; when set, the probe is skipped entirely and
+`s_user_committed_wifi` is set the same way `network_skip_modem_probe()` sets it for a live
+in-progress probe) and `has_modem` (u8, sticky — set the first time any boot's `modem_probe()`
+returns true, never cleared short of factory reset; needed because `modem_is_present()` reads
+false once already running in WiFi mode, so it can't by itself tell "genuinely WiFi-only
+hardware" from "a cellular board currently choosing not to use it"). `network.c` exposes
+`network_set_uplink_preference(prefer_wifi, ssid, password)` / `network_get_uplink_preference()`
+/ `network_has_cellular_hw()`. `webui_server.c`'s `POST /api/v1/uplink/prefer`
+`{prefer: "wifi"|"cellular", ssid?, password?}` calls it, saves WiFi credentials in the same
+request when switching to WiFi (so the next boot connects immediately, no second SoftAP
+round-trip), and reboots via `tracked_restart` (exposed through the new `restart.h`, mirroring
+`provision.h`'s pattern for reaching an `mdb-slave-esp32s3.c` function from `webui_server.c`).
+`GET /api/v1/system/info` gained `uplink_switch: {available, preference}`; the captive portal's
+"claimed" view (`webui/index.html`) renders a switch control keyed off `available`, not
+`variant` — same reasoning as `has_modem` above. Wasn't feasible to bolt on top of the existing
+either/or boot branch without changes: WiFi driver + both netifs already run in APSTA mode
+simultaneously with the modem at boot (this was already true before this feature — SoftAP has
+to survive `modem_probe()` glitch-free), so the actual gap was event-handler registration +
+auto-connect being withheld on the cellular branch, not missing hardware/driver init.
+
 **Cellular recovery (P4 + post-milestone hardening)**: Multi-layer escalation. Layer 1 — `network.c::ppp_reconnect_task` retries `modem_disconnect`+`modem_connect` 3 times on `IP_EVENT_PPP_LOST_IP`, ~6 s total. Layer 1.5/1.6/2/3 — `cellular_bring_up_task` recovery ladder triggers on **either** IPCP timeout **or phantom-PPP** (TCP probe to 1.1.1.1:53 fails after PPP_GOT_IP). Steps: `modem_pdp_reset` (CGACT=0/1, ~5s) → `modem_rf_reset` (CFUN=0/1, ~10s) → `modem_soft_restart` (CFUN=1,1, ~12s) → `modem_hard_reset` (PWRKEY toggle-pair, ~15s, true reset). Each step is followed by `modem_connect` + reachability probe; only if probe succeeds is `UPLINK_UP` fired. Worst-case ~3-4 min ladder traversal before bailing OFFLINE; `offline_retry` timer (30s) re-spawns fresh `cellular_bring_up_task`. Layer 4 — `modem.c::modem_watchdog_task` (30 s tick) calls `modem_hard_reset` after 3 consecutive `AT` failures (bounded to 2 hard-resets before deferring to Layer 5). Layer 5 — `mqtt_watchdog_cb` hard-reboots after 10 min without MQTT. MQTT keepalive bumps to 180 s + network/reconnect timeouts to 30 s/20 s when uplink is cellular at `esp_mqtt_client_init` time. Known limitation: at MQTT-init time `network_init()` has not yet run, so `modem_present` is false and cellular boards still get the WiFi-tuned MQTT values on the first connection. The watchdog task is started exclusively from `cellular_bring_up_task` (after `modem_connect` succeeds), so WiFi-only boards never spawn it.
 
 **Phantom-PPP detection (post-milestone)**: SIM7080G has two parallel network stacks (host PPP + internal AT+CIP*/AT+CNACT*) sharing the same PDP context. Residue in the internal stack splits the PDP binding — IPCP completes and inbound flows (cached air-side state) but outbound silently drops at GTP. Field symptom: TLS cert downloads OK, ClientKeyExchange never reaches server, server FINs at 15s timeout. **Three-layer protection**: (1) `modem_init` proactively clears state via `AT+CIPSHUT` + `AT+CNACT=0,0` (best-effort, ignore errors); (2) `modem_connect` verifies PDP via `AT+CGCONTRDP=1` poll (5×1s) after `+CEREG: 1,5` — confirms data attach actually completed before entering DATA mode; (3) `network.c::probe_internet_tcp("1.1.1.1", 53, 5000ms)` runs after `PPP_GOT_IP_BIT` and BEFORE `UPLINK_UP` — failed probe triggers recovery ladder immediately instead of letting MQTT/claim waste minutes on a dead path. **Important**: never call `AT+CGACT=1,1` manually on LTE — the default bearer auto-activates with registration; manual call introduces the race that creates phantom-PPP in the first place. **Note**: `10.0.0.1` in `PPP GOT_IP` log is the SIMCom IPCP peer placeholder (normal), not a stub from a half-broken state.
