@@ -244,10 +244,17 @@ const editingNameValue = ref('')
 function startEditName(device: EmbeddedDevice) {
   editingNameId.value = device.id
   editingNameValue.value = device.name ?? ''
+  nextTick(() => {
+    document.querySelectorAll<HTMLInputElement>(`[data-name-input="${device.id}"]`).forEach(el => {
+      el.focus()
+      el.select()
+    })
+  })
 }
 
 function cancelEditName() {
   editingNameId.value = null
+  editingNameValue.value = ''
 }
 
 async function saveName(device: EmbeddedDevice) {
@@ -350,14 +357,14 @@ function closeSoftapModal() {
                 v-model="editingNameValue"
                 type="text"
                 maxlength="60"
-                autofocus
+                :data-name-input="device.id"
                 class="h-7 w-full rounded border bg-background px-2 text-sm font-medium"
                 @keyup.enter="saveName(device)"
                 @keyup.esc="cancelEditName"
                 @blur="saveName(device)"
               />
               <button
-                v-else
+                v-else-if="isAdmin"
                 type="button"
                 class="text-left text-sm hover:underline"
                 :class="device.name ? 'font-medium' : 'text-muted-foreground italic'"
@@ -365,6 +372,13 @@ function closeSoftapModal() {
               >
                 {{ device.name ?? t('devices.addName') }}
               </button>
+              <span
+                v-else
+                class="text-sm"
+                :class="device.name ? 'font-medium' : 'text-muted-foreground italic'"
+              >
+                {{ device.name ?? t('devices.addName') }}
+              </span>
             </div>
             <!-- Top row: Subdomain + Status + Delete -->
             <div class="flex items-center justify-between mb-3">
@@ -486,21 +500,30 @@ function closeSoftapModal() {
                     v-model="editingNameValue"
                     type="text"
                     maxlength="60"
-                    autofocus
+                    :data-name-input="device.id"
                     class="h-7 w-full max-w-[10rem] rounded border bg-background px-2 text-sm"
                     @keyup.enter="saveName(device)"
                     @keyup.esc="cancelEditName"
                     @blur="saveName(device)"
                   />
                   <button
-                    v-else
+                    v-else-if="isAdmin"
                     type="button"
-                    class="text-left hover:underline"
+                    class="block max-w-[12rem] truncate text-left hover:underline"
                     :class="device.name ? 'font-medium' : 'text-muted-foreground italic'"
+                    :title="device.name ?? undefined"
                     @click="startEditName(device)"
                   >
                     {{ device.name ?? t('devices.addName') }}
                   </button>
+                  <span
+                    v-else
+                    class="block max-w-[12rem] truncate"
+                    :class="device.name ? 'font-medium' : 'text-muted-foreground italic'"
+                    :title="device.name ?? undefined"
+                  >
+                    {{ device.name ?? t('devices.addName') }}
+                  </span>
                 </td>
                 <td class="px-4 py-3 font-mono">{{ device.subdomain }}</td>
                 <td class="px-4 py-3 font-mono text-muted-foreground">

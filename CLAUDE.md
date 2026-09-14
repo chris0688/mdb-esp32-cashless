@@ -202,7 +202,7 @@ Tables:
 - `companies` – organisations; has `anthropic_api_key` (nullable) for AI insights, `velocity_days` (default 30) for sales velocity calculation
 - `organization_members` – `(company_id, user_id, role)` where role ∈ `{admin, viewer}`
 - `invitations` – email-scoped invite tokens with expiry
-- `embeddeds` – registered devices: `subdomain` (bigint, auto-increment), `mac_address`, `passkey`, `status`, `mdb_diagnostics` (jsonb), `vmc_level` (int)
+- `embeddeds` – registered devices: `subdomain` (bigint, auto-increment), `mac_address`, `name` (nullable text, admin-assigned label), `passkey`, `status`, `mdb_diagnostics` (jsonb), `vmc_level` (int)
 - `sales` – vend events: `embedded_id`, `item_price` (**EUR, not cents**), `item_number`, `channel`, `lat`, `lng`, `machine_id`; has `REPLICA IDENTITY FULL` for realtime delete events
 - `paxcounter` – foot traffic: `embedded_id`, `count`
 - `device_provisioning` – one-time provisioning codes: `short_code`, `expires_at`, `used_at`, `embedded_id`
