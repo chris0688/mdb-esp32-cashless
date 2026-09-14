@@ -25,6 +25,7 @@ const sortedDevices = computed(() => {
     d => d.status,
     d => d.firmware_version,
     d => String(d.subdomain),
+    d => d.name,
   ])
   const dir = devSortDir.value === 'asc' ? 1 : -1
   return [...filtered].sort((a, b) => {
@@ -54,6 +55,7 @@ interface EmbeddedDevice {
   softap_password: string | null
   machine_name: string | null
   machine_id: string | null
+  name: string | null
 }
 
 const devices = ref<EmbeddedDevice[]>([])
@@ -65,7 +67,7 @@ async function fetchDevices() {
     // Fetch all embedded devices with their linked vendingMachine (if any)
     const { data, error } = await supabase
       .from('embeddeds')
-      .select('id, created_at, subdomain, mac_address, status, status_at, firmware_version, firmware_build_date, mdb_diagnostics, softap_password')
+      .select('id, created_at, subdomain, mac_address, status, status_at, firmware_version, firmware_build_date, mdb_diagnostics, softap_password, name')
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -119,6 +121,7 @@ function subscribeToDeviceUpdates() {
           existing.firmware_version = updated.firmware_version ?? existing.firmware_version
           existing.firmware_build_date = updated.firmware_build_date ?? existing.firmware_build_date
           existing.mdb_diagnostics = updated.mdb_diagnostics ?? existing.mdb_diagnostics
+          existing.name = updated.name
         }
       }
     )
@@ -234,6 +237,30 @@ async function confirmDelete() {
   })
 }
 
+// ── Inline name edit ────────────────────────────────────────────────────
+const editingNameId = ref<string | null>(null)
+const editingNameValue = ref('')
+
+function startEditName(device: EmbeddedDevice) {
+  editingNameId.value = device.id
+  editingNameValue.value = device.name ?? ''
+}
+
+function cancelEditName() {
+  editingNameId.value = null
+}
+
+async function saveName(device: EmbeddedDevice) {
+  const newName = editingNameValue.value.trim() || null
+  editingNameId.value = null
+  if (newName === device.name) return
+  const { error } = await supabase
+    .from('embeddeds')
+    .update({ name: newName })
+    .eq('id', device.id)
+  if (!error) device.name = newName
+}
+
 // ── SoftAP credentials modal ────────────────────────────────────────────
 const softapModalOpen = ref(false)
 const softapModalDevice = ref<EmbeddedDevice | null>(null)
@@ -316,6 +343,29 @@ function closeSoftapModal() {
             :key="device.id"
             class="rounded-lg border bg-card p-4 transition-colors"
           >
+            <!-- Name row -->
+            <div class="mb-2">
+              <input
+                v-if="editingNameId === device.id"
+                v-model="editingNameValue"
+                type="text"
+                maxlength="60"
+                autofocus
+                class="h-7 w-full rounded border bg-background px-2 text-sm font-medium"
+                @keyup.enter="saveName(device)"
+                @keyup.esc="cancelEditName"
+                @blur="saveName(device)"
+              />
+              <button
+                v-else
+                type="button"
+                class="text-left text-sm hover:underline"
+                :class="device.name ? 'font-medium' : 'text-muted-foreground italic'"
+                @click="startEditName(device)"
+              >
+                {{ device.name ?? t('devices.addName') }}
+              </button>
+            </div>
             <!-- Top row: Subdomain + Status + Delete -->
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
@@ -405,6 +455,7 @@ function closeSoftapModal() {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b bg-muted/50 text-left">
+                <th class="px-4 py-3 font-medium">{{ t('devices.nameCol') }}</th>
                 <th class="px-4 py-3 font-medium cursor-pointer select-none hover:text-foreground" @click="toggleDevSort('subdomain')">
                   <SortHeader :icon="devSortIcon('subdomain')">{{ t('devices.subdomainCol') }}</SortHeader>
                 </th>
@@ -429,6 +480,28 @@ function closeSoftapModal() {
                 :key="device.id"
                 class="border-b last:border-0 hover:bg-muted/30 transition-colors"
               >
+                <td class="px-4 py-3">
+                  <input
+                    v-if="editingNameId === device.id"
+                    v-model="editingNameValue"
+                    type="text"
+                    maxlength="60"
+                    autofocus
+                    class="h-7 w-full max-w-[10rem] rounded border bg-background px-2 text-sm"
+                    @keyup.enter="saveName(device)"
+                    @keyup.esc="cancelEditName"
+                    @blur="saveName(device)"
+                  />
+                  <button
+                    v-else
+                    type="button"
+                    class="text-left hover:underline"
+                    :class="device.name ? 'font-medium' : 'text-muted-foreground italic'"
+                    @click="startEditName(device)"
+                  >
+                    {{ device.name ?? t('devices.addName') }}
+                  </button>
+                </td>
                 <td class="px-4 py-3 font-mono">{{ device.subdomain }}</td>
                 <td class="px-4 py-3 font-mono text-muted-foreground">
                   {{ device.mac_address ?? '—' }}
