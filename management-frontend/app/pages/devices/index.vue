@@ -138,12 +138,14 @@ const expiresAt = ref('')
 const genError = ref('')
 const qrDataUrl = ref('')
 const qrSrvUrl = ref('')
+const deviceName = ref('')
 
 function openModal() {
   step.value = 1
   shortCode.value = ''
   expiresAt.value = ''
   genError.value = ''
+  deviceName.value = ''
   showModal.value = true
 }
 
@@ -152,7 +154,7 @@ async function generateCode() {
   genError.value = ''
   try {
     const { data, error } = await supabase.functions.invoke('create-provisioning-token', {
-      body: { device_only: true },
+      body: { device_only: true, name: deviceName.value.trim() || undefined },
     })
     if (error) throw error
     if (data?.error) throw new Error(data.error)
@@ -554,6 +556,17 @@ function closeSoftapModal() {
         <p class="mb-5 text-sm text-muted-foreground">
           {{ t('devices.registerDescription') }}
         </p>
+        <div class="mb-4 space-y-1">
+          <label class="text-sm font-medium" for="device-name-input">{{ t('devices.deviceName') }}</label>
+          <input
+            id="device-name-input"
+            v-model="deviceName"
+            type="text"
+            maxlength="60"
+            :placeholder="t('devices.deviceNamePlaceholder')"
+            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
         <FormError :message="genError" class="mb-3" />
         <div class="flex gap-2">
           <button
