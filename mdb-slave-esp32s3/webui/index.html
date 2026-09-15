@@ -274,24 +274,29 @@
     return (
       '<div class="panel center">' +
         '<div class="spinner"></div>' +
-        '<h2 style="margin-top:14px">Detecting mobile modem…</h2>' +
-        '<p class="muted" style="margin-top:6px">Checking whether this device has a SIM card. Usually takes a few seconds.</p>' +
-        '<button id="skip_probe_btn" type="button" class="ghost" style="margin-top:18px" ' +
-                'onclick="skipProbe()">No SIM — set up via WiFi</button>' +
+        '<h2 style="margin-top:14px">Checking for a mobile connection…</h2>' +
+        '<p class="muted" style="margin-top:6px">Usually takes a few seconds.</p>' +
+        '<p class="muted" style="margin-top:14px;font-size:12px">Prefer WiFi instead — no SIM, or you\'d just rather not use mobile data?</p>' +
+        '<button id="skip_probe_btn" type="button" class="ghost" style="margin-top:8px" ' +
+                'onclick="skipProbe()">Set up with WiFi instead</button>' +
       '</div>'
     );
   }
 
-  /* Called from the "No SIM — set up via WiFi" button in viewProbing. */
+  /* Called from the "Set up with WiFi instead" button in viewProbing. Works
+   * even when this board does have cellular hardware — network_skip_modem_
+   * probe() on the device deliberately discards a positive probe result
+   * once the user has committed to WiFi here, so this is a genuine
+   * cellular-vs-WiFi choice, not just a fallback for boards without a SIM. */
   window.skipProbe = function() {
     var btn = el("skip_probe_btn");
-    if (btn) { btn.disabled = true; btn.textContent = "Skipping…"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Switching…"; }
     fetch("/api/v1/system/skip-probe", { method: "POST" })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
       .then(function (res) {
         if (!res.ok) {
-          if (btn) { btn.disabled = false; btn.textContent = "No SIM — set up via WiFi"; }
-          alert("Could not skip detection: " + (res.body && res.body.error ? res.body.error : "unknown error"));
+          if (btn) { btn.disabled = false; btn.textContent = "Set up with WiFi instead"; }
+          alert("Could not switch to WiFi: " + (res.body && res.body.error ? res.body.error : "unknown error"));
           return;
         }
         /* Server-side flag is now set; next /system/info poll will
@@ -299,8 +304,8 @@
          * router will switch us to wifi_and_claim. */
       })
       .catch(function () {
-        if (btn) { btn.disabled = false; btn.textContent = "No SIM — set up via WiFi"; }
-        alert("Network error while skipping detection.");
+        if (btn) { btn.disabled = false; btn.textContent = "Set up with WiFi instead"; }
+        alert("Network error while switching to WiFi.");
       });
   };
 

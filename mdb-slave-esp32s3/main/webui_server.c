@@ -60,6 +60,12 @@ static void dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_ad
 static esp_err_t index_get_handler(httpd_req_t *req) {
     const size_t html_len = index_html_end - index_html_start;
     httpd_resp_set_type(req, "text/html");
+    /* The page is re-embedded into the firmware binary on every build (no
+     * separate filesystem/data partition to reflash), so an OTA update can
+     * change its content while the URL stays "/" — without this header a
+     * phone that already cached the portal page from a previous firmware
+     * version keeps showing the stale one after an update. */
+    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_send(req, (const char *)index_html_start, html_len);
     return ESP_OK;
 }
