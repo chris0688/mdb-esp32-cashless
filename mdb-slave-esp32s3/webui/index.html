@@ -493,10 +493,14 @@
             'The device will reboot and use this network instead of the mobile connection. ' +
             'You can switch back to cellular anytime from this same screen.' +
           '</p>' +
-          '<label>WiFi network</label>' +
-          '<input id="i_uplink_ssid" placeholder="Network name (SSID)" autocapitalize="none" autocorrect="off">' +
+          '<div class="wifi-header-row">' +
+            '<label class="first">WiFi network</label>' +
+            '<button type="button" class="scan-btn" id="scan_btn">Scan</button>' +
+          '</div>' +
+          '<div id="wifi_list" class="wifi-list"></div>' +
+          '<input id="i_ssid" placeholder="Enter SSID manually or pick from list" autocapitalize="none" autocorrect="off">' +
           '<label style="margin-top:8px">Password</label>' +
-          '<input id="i_uplink_pass" type="password" placeholder="Leave empty for an open network">' +
+          '<input id="i_pwd" type="password" placeholder="leave empty for open networks">' +
           '<div class="err-banner"></div>' +
           '<div style="margin-top:10px;display:flex;gap:8px">' +
             '<button type="button" id="uplink_wifi_submit" >Switch &amp; reboot</button>' +
@@ -527,10 +531,20 @@
       renderUplinkSwitch(lastInfo);
     };
 
+    /* Same scan UI as the setup wizard's WiFi step (renderWifiList/
+     * refreshWifiScan target the shared #wifi_list / #scan_btn / #i_ssid
+     * ids by design, so this reuses them as-is). Kick off a scan as soon
+     * as the form appears, same as viewWifiAndClaim does on mount. */
+    var scanBtn = el("scan_btn");
+    if (scanBtn) {
+      scanBtn.onclick = refreshWifiScan;
+      refreshWifiScan();
+    }
+
     var submitBtn = el("uplink_wifi_submit");
     if (submitBtn) submitBtn.onclick = function () {
-      var ssid = (el("i_uplink_ssid").value || "").trim();
-      var pass = el("i_uplink_pass").value || "";
+      var ssid = (el("i_ssid").value || "").trim();
+      var pass = el("i_pwd").value || "";
       if (!ssid) {
         setError("#form_uplink_wifi", "Network name is required.");
         return;
