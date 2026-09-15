@@ -279,6 +279,7 @@
         '<p class="muted" style="margin-top:14px;font-size:12px">Prefer WiFi instead — no SIM, or you\'d just rather not use mobile data?</p>' +
         '<button id="skip_probe_btn" type="button" class="ghost" style="margin-top:8px" ' +
                 'onclick="skipProbe()">Set up with WiFi instead</button>' +
+        '<div class="err-banner" style="margin-top:10px"></div>' +
       '</div>'
     );
   }
@@ -287,7 +288,13 @@
    * even when this board does have cellular hardware — network_skip_modem_
    * probe() on the device deliberately discards a positive probe result
    * once the user has committed to WiFi here, so this is a genuine
-   * cellular-vs-WiFi choice, not just a fallback for boards without a SIM. */
+   * cellular-vs-WiFi choice, not just a fallback for boards without a SIM.
+   *
+   * Errors shown via the inline .err-banner, not alert() — captive-portal
+   * WebViews (iOS Captive Network Assistant, Android's "Sign in to
+   * network" popup) silently no-op alert()/confirm()/prompt() in many
+   * versions, so an alert() here would just vanish, leaving the re-
+   * enabled button with no visible explanation. */
   window.skipProbe = function() {
     var btn = el("skip_probe_btn");
     if (btn) { btn.disabled = true; btn.textContent = "Switching…"; }
@@ -296,7 +303,7 @@
       .then(function (res) {
         if (!res.ok) {
           if (btn) { btn.disabled = false; btn.textContent = "Set up with WiFi instead"; }
-          alert("Could not switch to WiFi: " + (res.body && res.body.error ? res.body.error : "unknown error"));
+          setError(".panel", "Could not switch to WiFi: " + (res.body && res.body.error ? res.body.error : "unknown error"));
           return;
         }
         /* Server-side flag is now set; next /system/info poll will
@@ -305,7 +312,7 @@
       })
       .catch(function () {
         if (btn) { btn.disabled = false; btn.textContent = "Set up with WiFi instead"; }
-        alert("Network error while switching to WiFi.");
+        setError(".panel", "Network error while switching to WiFi.");
       });
   };
 
@@ -451,6 +458,7 @@
    * SSID/password mini-form), a WiFi-mode device gets "switch back to
    * cellular" (no form, cellular config is already saved from before). */
   var uplinkWifiFormOpen = false;
+  var uplinkCellularConfirmOpen = false;
   /* Tracks the last DOM state we actually rendered, so a poll response
    * that doesn't change the *mode* (still "cellular", still the open
    * form, etc.) skips the innerHTML rebuild entirely — /system/info is
@@ -474,7 +482,9 @@
     }
 
     var onWifi = (usw.preference === "wifi");
-    var wantMode = onWifi ? "wifi" : (uplinkWifiFormOpen ? "wifi_form" : "cellular");
+    var wantMode = onWifi
+      ? (uplinkCellularConfirmOpen ? "cellular_confirm" : "wifi")
+      : (uplinkWifiFormOpen ? "wifi_form" : "cellular");
     if (wantMode === uplinkSwitchMode) return;   /* nothing actually changed — leave the DOM alone */
     uplinkSwitchMode = wantMode;
 
@@ -509,7 +519,7 @@
             '<button type="button" id="uplink_wifi_cancel" class="ghost">Cancel</button>' +
           '</div>' +
         '</div>';
-    } else {
+    } else if (onWifi && !uplinkCellularConfirmOpen) {
       box.innerHTML =
         '<div class="info-banner" style="text-align:left">' +
           '<strong>Uplink:</strong> WiFi (by your choice)' +
@@ -517,6 +527,21 @@
             'Cellular hardware is present but not in use.' +
           '</div>' +
           '<button type="button" id="uplink_to_cellular_btn" class="ghost" style="margin-top:10px">Switch back to cellular…</button>' +
+        '</div>';
+    } else {
+      /* Inline confirm instead of window.confirm() — captive-portal
+       * WebViews (iOS Captive Network Assistant, Android's "Sign in to
+       * network" popup) silently no-op alert()/confirm()/prompt() in
+       * many versions, which made the old confirm()-gated button do
+       * nothing at all when tapped from inside one. */
+      box.innerHTML =
+        '<div class="info-banner" id="form_uplink_cellular_confirm" style="text-align:left">' +
+          '<strong>Switch back to cellular and reboot now?</strong>' +
+          '<div class="err-banner" style="margin-top:6px"></div>' +
+          '<div style="margin-top:10px;display:flex;gap:8px">' +
+            '<button type="button" id="uplink_cellular_confirm">Yes, switch</button>' +
+            '<button type="button" id="uplink_cellular_cancel" class="ghost">Cancel</button>' +
+          '</div>' +
         '</div>';
     }
 
@@ -575,22 +600,33 @@
 
     var toCellularBtn = el("uplink_to_cellular_btn");
     if (toCellularBtn) toCellularBtn.onclick = function () {
-      if (!confirm("Switch back to the cellular connection and reboot now?")) return;
-      toCellularBtn.disabled = true;
-      toCellularBtn.textContent = "Switching…";
+      uplinkCellularConfirmOpen = true;
+      renderUplinkSwitch(lastInfo);
+    };
+
+    var cellularCancelBtn = el("uplink_cellular_cancel");
+    if (cellularCancelBtn) cellularCancelBtn.onclick = function () {
+      uplinkCellularConfirmOpen = false;
+      renderUplinkSwitch(lastInfo);
+    };
+
+    var cellularConfirmBtn = el("uplink_cellular_confirm");
+    if (cellularConfirmBtn) cellularConfirmBtn.onclick = function () {
+      cellularConfirmBtn.disabled = true;
+      cellularConfirmBtn.textContent = "Switching…";
       postJson("/api/v1/uplink/prefer", { prefer: "cellular" }).then(function (j) {
         if (j && j.ok) {
           uplinkSwitchMode = "switching";
           box.innerHTML = '<div class="info-banner"><span class="spinner sm"></span> Rebooting onto cellular…</div>';
         } else {
-          toCellularBtn.disabled = false;
-          toCellularBtn.textContent = "Switch back to cellular…";
-          alert((j && j.error) || "Failed to switch.");
+          cellularConfirmBtn.disabled = false;
+          cellularConfirmBtn.textContent = "Yes, switch";
+          setError("#form_uplink_cellular_confirm", (j && j.error) || "Failed to switch.");
         }
       }).catch(function () {
-        toCellularBtn.disabled = false;
-        toCellularBtn.textContent = "Switch back to cellular…";
-        alert("Network error.");
+        cellularConfirmBtn.disabled = false;
+        cellularConfirmBtn.textContent = "Yes, switch";
+        setError("#form_uplink_cellular_confirm", "Network error.");
       });
     };
   }
