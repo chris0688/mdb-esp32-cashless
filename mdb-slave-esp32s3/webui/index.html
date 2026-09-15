@@ -372,6 +372,7 @@
           '<div class="err-banner"></div>' +
           '<button type="submit">Connect WiFi + register</button>' +
         '</form>' +
+        '<div id="uplink_switch" style="margin-top:14px;text-align:left"></div>' +
       '</div>'
     );
   }
@@ -1036,6 +1037,13 @@
        * viewProbing() skip button only exists during the probe itself,
        * which frequently resolves in well under a second (warm modem),
        * so a real phone's first /system/info poll often never sees it. */
+      renderUplinkSwitch(info);
+    } else if (currentView === "wifi_and_claim") {
+      /* Mirror image of the cellular_config case above: got here either
+       * via the probing-screen skip button or the uplink-preference
+       * reboot, and needs a way back to cellular without a factory
+       * reset. Renders the "switch back to cellular" branch — onWifi is
+       * always true by the time this view is reachable. */
       renderUplinkSwitch(info);
     }
   }
