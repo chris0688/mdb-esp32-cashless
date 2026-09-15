@@ -415,6 +415,7 @@
         '<div class="info-banner" id="claim_progress" style="display:none">' +
           '<span class="spinner sm"></span><span id="claim_progress_text">Request sent…</span>' +
         '</div>' +
+        '<div id="uplink_switch" style="margin-top:14px;text-align:left"></div>' +
       '</div>'
     );
   }
@@ -1044,6 +1045,15 @@
        * reboot, and needs a way back to cellular without a factory
        * reset. Renders the "switch back to cellular" branch — onWifi is
        * always true by the time this view is reachable. */
+      renderUplinkSwitch(info);
+    } else if (currentView === "claim") {
+      /* Reached once the uplink is actually up (WIFI_UP or CELLULAR_UP,
+       * pre-claim) — a third landing spot distinct from both forms
+       * above, and the last one that was still missing the switch.
+       * renderUplinkSwitch reads usw.preference itself, so the same
+       * call correctly offers "switch to WiFi" or "switch back to
+       * cellular" depending on which uplink actually got the device
+       * here. */
       renderUplinkSwitch(info);
     }
   }
