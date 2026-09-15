@@ -332,6 +332,7 @@
           '<div class="err-banner"></div>' +
           '<button type="submit">Connect</button>' +
         '</form>' +
+        '<div id="uplink_switch" style="margin-top:14px;text-align:left"></div>' +
       '</div>'
     );
   }
@@ -1015,6 +1016,13 @@
       renderUplinkSwitch(info);
     } else if (currentView === "claimed_connecting") {
       renderClaimedConnecting(info);
+    } else if (currentView === "cellular_config") {
+      /* Same control as the post-claim "claimed" view — pre-claim, this is
+       * the only reliably reachable place to switch to WiFi: the
+       * viewProbing() skip button only exists during the probe itself,
+       * which frequently resolves in well under a second (warm modem),
+       * so a real phone's first /system/info poll often never sees it. */
+      renderUplinkSwitch(info);
     }
   }
 
