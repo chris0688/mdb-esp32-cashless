@@ -705,6 +705,21 @@ static void network_ppp_event_handler(void *arg, esp_event_base_t event_base,
             xEventGroupClearBits(s_ppp_event_group, PPP_GOT_IP_BIT);
         }
         if (s_state == NETWORK_STATE_CELLULAR_UP) {
+            /* Mark the link down BEFORE spawning the reconnect task, not
+             * after. ppp_reconnect_task's own first move, once it holds
+             * modem_op_lock, is "if s_state is already CELLULAR_UP, some
+             * other recovery path must have beaten us to it — bail out
+             * without tearing down a freshly-restored link." That check
+             * is only meaningful if losing IP actually left s_state
+             * somewhere other than CELLULAR_UP; leaving it untouched here
+             * made the guard trivially true on every single LOST_IP,
+             * so the task always exited immediately without ever
+             * attempting a reconnect. Confirmed live (2026-09-15 field
+             * log): PPP dropped, "state already CELLULAR_UP after lock —
+             * skipping" fired instantly, and the device stayed offline
+             * until the 10-minute MQTT watchdog hard-reboot forced a
+             * fresh boot — the only path that still worked. */
+            s_state = NETWORK_STATE_OFFLINE;
             /* Layer 1: spawn a reconnect task. We do this in a task
              * because modem_disconnect/modem_connect can take seconds,
              * and the event handler must not block. */
