@@ -1,7 +1,7 @@
 This is a more stable version of the 3D holder for the MDB PCB with SIM Modem.
 
 Features:
-Improved Stability: Features an added support structure directly at the MDB connector to provide better stability when plugging and unplugging cables.
+Improved Stability: Features an added support structure directly at the MDB connector to provide better stability when plugging and unplugging cables. Holder/holes for two SMA connectors for external Antenna.
 
 Hints:
 Iam used 5cm long U.F.L1 to SMA Female adapters (see also preview).
